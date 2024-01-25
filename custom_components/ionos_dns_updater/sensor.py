@@ -73,7 +73,8 @@ class LocalInterface:
         for ip in ips:
             if isinstance(ip, IPv6Address):
                 if ip.is_global:
-                    out_ip = ip.exploded
+                    _LOGGER.error("Found a global ip address")
+                    out_ip = str(ip).split('%', 1)[0] # this does something like ...aaaa:ffff%0 for the interface. Sadly this kills its own functions, lol
 
         if out_ip == "":
             _LOGGER.error("Local Platform could not detect any configured IP addresses")
