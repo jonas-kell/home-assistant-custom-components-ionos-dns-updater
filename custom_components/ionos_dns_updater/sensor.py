@@ -52,10 +52,10 @@ class GetIpInterface:
     def __init__(self) -> None:
         pass
 
-    async def get_ipv6_address() -> str:
+    async def get_ipv6_address(self) -> str:
         return ""
 
-    def get_sensor_type() -> Literal["local_ipv6_address", "upstream_ipv6_address"]:
+    def get_sensor_type(self) -> Literal["local_ipv6_address", "upstream_ipv6_address"]:
         pass
 
 
@@ -79,7 +79,7 @@ class LocalInterface(GetIpInterface):
 
         return out_ip
     
-    def get_sensor_type() -> Literal["local_ipv6_address", "upstream_ipv6_address"]:
+    def get_sensor_type(self) -> Literal["local_ipv6_address", "upstream_ipv6_address"]:
         return "local_ipv6_address"
 
 class IonosInterface(GetIpInterface):
@@ -100,7 +100,7 @@ class IonosInterface(GetIpInterface):
 
         return out_ip
     
-    def get_sensor_type() -> Literal["local_ipv6_address", "upstream_ipv6_address"]:
+    def get_sensor_type(self) -> Literal["local_ipv6_address", "upstream_ipv6_address"]:
         return "upstream_ipv6_address"
     
 class IpSensor(RestoreSensor):
