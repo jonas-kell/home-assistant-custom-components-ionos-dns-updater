@@ -44,8 +44,8 @@ async def async_setup_platform(
 
     # Add entities
     add_entities(
-        IpSensor(interf, device_id)
-        for interf, device_id in [(LocalInterface(hass), "local_ipv6_address"), (IonosInterface(domain), "dns_lookup_ipv6_address")]
+        IpSensor(interf)
+        for interf in [LocalInterface(hass), IonosInterface(domain)]
     )
 
 class GetIpInterface:
@@ -107,16 +107,14 @@ class IpSensor(RestoreSensor):
 
     name_additions = {
         "local_ipv6_address": "Local",
-        "upstream_ipv6_address": "Upstream",
+        "upstream_ipv6_address": "DNS lookup",
     }
 
     def __init__(
         self,
         sensor:GetIpInterface,
-        device_id: str,
     ) -> None:
         self._sensor = sensor
-        self._device_id = device_id
         self._name = "IPv6 Address" + " " + self.name_additions[sensor.get_sensor_type()]
 
         self._native_value = ""
@@ -141,5 +139,5 @@ class IpSensor(RestoreSensor):
         if (last_sensor_data := await self.async_get_last_sensor_data()) is not None:
             self._native_value = last_sensor_data.native_value
             _LOGGER.info(
-                f"After re-adding, loaded ip address sensor state value for {self._device_id}: {self._native_value}"
+                f"After re-adding, loaded ip address sensor state value for {self._entitiy_id}: {self._native_value}"
             )
