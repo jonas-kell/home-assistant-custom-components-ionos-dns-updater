@@ -44,8 +44,8 @@ async def async_setup_platform(
 
     # Add entities
     add_entities(
-        IpSensor(interf)
-        for interf in [LocalInterface(hass), IonosInterface(domain)]
+        IpSensor(interf, unique_id)
+        for interf, unique_id in [(LocalInterface(hass), "ipv6_address_local"), (IonosInterface(domain), "ipv6_address_dns_lookup")]
     )
 
 class GetIpInterface:
@@ -55,7 +55,7 @@ class GetIpInterface:
     async def get_ipv6_address(self) -> str:
         return ""
 
-    def get_sensor_type(self) -> Literal["local_ipv6_address", "upstream_ipv6_address"]:
+    def get_sensor_type(self) -> Literal["ipv6_address_local", "ipv6_address_dns_lookup"]:
         pass
 
 
@@ -78,8 +78,8 @@ class LocalInterface(GetIpInterface):
 
         return out_ip
     
-    def get_sensor_type(self) -> Literal["local_ipv6_address", "upstream_ipv6_address"]:
-        return "local_ipv6_address"
+    def get_sensor_type(self) -> Literal["ipv6_address_local", "ipv6_address_dns_lookup"]:
+        return "ipv6_address_local"
 
 class IonosInterface(GetIpInterface):
     def __init__(self, url:str) -> None:
@@ -99,23 +99,25 @@ class IonosInterface(GetIpInterface):
 
         return out_ip
     
-    def get_sensor_type(self) -> Literal["local_ipv6_address", "upstream_ipv6_address"]:
-        return "upstream_ipv6_address"
+    def get_sensor_type(self) -> Literal["ipv6_address_local", "ipv6_address_dns_lookup"]:
+        return "ipv6_address_dns_lookup"
     
 class IpSensor(RestoreSensor):
     """Ip address Sensor"""
 
     name_additions = {
-        "local_ipv6_address": "Local",
-        "upstream_ipv6_address": "DNS lookup",
+        "ipv6_address_local": "Local",
+        "ipv6_address_dns_lookup": "DNS Lookup",
     }
 
     def __init__(
         self,
-        sensor:GetIpInterface,
+        sensor: GetIpInterface,
+        unique_id: str,
     ) -> None:
         self._sensor = sensor
         self._name = "IPv6 Address" + " " + self.name_additions[sensor.get_sensor_type()]
+        self._attr_unique_id = unique_id
 
         self._native_value = ""
 
@@ -139,5 +141,5 @@ class IpSensor(RestoreSensor):
         if (last_sensor_data := await self.async_get_last_sensor_data()) is not None:
             self._native_value = last_sensor_data.native_value
             _LOGGER.info(
-                f"After re-adding, loaded ip address sensor state value for {self._name}: {self._native_value}"
+                f"After re-adding, loaded ip address sensor state value for {self._attr_unique_id}: {self._native_value}"
             )
