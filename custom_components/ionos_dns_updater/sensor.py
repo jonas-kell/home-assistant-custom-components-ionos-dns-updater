@@ -19,7 +19,7 @@ from homeassistant.const import (
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.typing import ConfigType, DiscoveryInfoType
-from homeassistant.components.network import async_get_enabled_source_ips
+from homeassistant.components.network import async_get_enabled_source_ips, IPv6Address
 
 import aiohttp
 import itertools
@@ -48,8 +48,10 @@ async def async_setup_platform(
     discovery_info: DiscoveryInfoType | None = None,
 ) -> None:   
 
-    test = LocalInterface(hass)
-    await test.get_ipv6_address()
+    interface = LocalInterface(hass)
+    ip = await interface.get_ipv6_address()
+
+    _LOGGER.error(ip)
 
 
 class GetIpInterface:
@@ -65,6 +67,16 @@ class LocalInterface:
         super().__init__()
 
     async def get_ipv6_address(self) -> str:
-        temp = await async_get_enabled_source_ips(self._hass)
-        _LOGGER.info(f"#devices {temp}")
+        ips = await async_get_enabled_source_ips(self._hass)
+        
+        out_ip: str = ""
+        for ip in ips:
+            if isinstance(ip, IPv6Address):
+                if ip.is_global:
+                    out_ip = ip.exploded
+
+        if out_ip == "":
+            _LOGGER.error("Local Platform could not detect any configured IP addresses")
+
+        return out_ip
     
