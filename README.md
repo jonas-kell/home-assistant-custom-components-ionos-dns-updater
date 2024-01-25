@@ -9,7 +9,7 @@ Example `configuration.yaml` entry
 ```
 sensor:
     - platform: ionos_dns_updater
-      name: testtest
+      domain: ha.xyz.de
 ```
 
--   `todo`: Todo duh
+-   `domain`: The domain-name of your Home assistant installation

@@ -7,14 +7,10 @@ from typing import Final
 import homeassistant.helpers.config_validation as cv
 from homeassistant.components.sensor import (
     PLATFORM_SCHEMA,
-    SensorDeviceClass,
     RestoreSensor,
-    SensorStateClass,
 )
 from homeassistant.const import (
-    CONF_IP_ADDRESS,
-    CONF_NAME,
-    CONF_DEVICES,
+    CONF_DOMAIN
 )
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
@@ -22,21 +18,17 @@ from homeassistant.helpers.typing import ConfigType, DiscoveryInfoType
 from homeassistant.components.network import async_get_enabled_source_ips, IPv6Address
 
 import aiohttp
-import itertools
 from typing import Literal
-import typing_extensions
-from datetime import datetime, time, timedelta
+import socket
 
 _LOGGER = logging.getLogger(__name__)
 
 DOMAIN: Final = "ionos_dns_updater"
-CONF_LOG_HTTP_ERRORS: Final = "log_http_errors"
 
 # Validation of the user's configuration
 PLATFORM_SCHEMA = PLATFORM_SCHEMA.extend(
     {
-        vol.Optional(CONF_LOG_HTTP_ERRORS, default=False): cv.boolean,
-        vol.Required(CONF_NAME): cv.string,
+        vol.Required(CONF_DOMAIN): cv.string,
     }
 )
 
@@ -48,11 +40,13 @@ async def async_setup_platform(
     discovery_info: DiscoveryInfoType | None = None,
 ) -> None:   
 
-    interface = LocalInterface(hass)
-    ip = await interface.get_ipv6_address()
+    domain = config[CONF_DOMAIN]
 
-    _LOGGER.error(ip)
-
+    # Add entities
+    add_entities(
+        IpSensor(interf, device_id)
+        for interf, device_id in [(LocalInterface(hass), "local_ipv6_address"), (IonosInterface(domain), "dns_lookup_ipv6_address")]
+    )
 
 class GetIpInterface:
     def __init__(self) -> None:
@@ -61,7 +55,11 @@ class GetIpInterface:
     async def get_ipv6_address() -> str:
         return ""
 
-class LocalInterface:
+    def get_sensor_type() -> Literal["local_ipv6_address", "upstream_ipv6_address"]:
+        pass
+
+
+class LocalInterface(GetIpInterface):
     def __init__(self, hass: HomeAssistant) -> None:
         self._hass = hass
         super().__init__()
@@ -77,7 +75,72 @@ class LocalInterface:
                     out_ip = str(ip).split('%', 1)[0] # this does something like ...aaaa:ffff%0 for the interface. Sadly this kills its own functions, lol
 
         if out_ip == "":
-            _LOGGER.error("Local Platform could not detect any configured IP addresses")
+            _LOGGER.error("Local Platform could not detect configured ipv6 address")
 
         return out_ip
     
+    def get_sensor_type() -> Literal["local_ipv6_address", "upstream_ipv6_address"]:
+        return "local_ipv6_address"
+
+class IonosInterface(GetIpInterface):
+    def __init__(self, url:str) -> None:
+        self._url = url
+        super().__init__()
+
+    async def get_ipv6_address(self) -> str:
+        out_ip: str = ""
+        
+        try:
+            out_ip = socket.getaddrinfo(self._url, None, socket.AF_INET6)[0][4][0]
+        except Exception as e:
+            _LOGGER.error("DNS lookup failed: " + str(e))
+
+        if out_ip == "":
+            _LOGGER.error("Remote Platform could not resolve ipv6 address from dns")
+
+        return out_ip
+    
+    def get_sensor_type() -> Literal["local_ipv6_address", "upstream_ipv6_address"]:
+        return "upstream_ipv6_address"
+    
+class IpSensor(RestoreSensor):
+    """Ip address Sensor"""
+
+    name_additions = {
+        "local_ipv6_address": "Local",
+        "upstream_ipv6_address": "Upstream",
+    }
+
+    def __init__(
+        self,
+        sensor:GetIpInterface,
+        device_id: str,
+    ) -> None:
+        self._sensor = sensor
+        self._device_id = device_id
+        self._name = "IPv6 Address" + " " + self.name_additions[sensor.get_sensor_type()]
+
+        self._native_value = ""
+
+    @property
+    def name(self) -> str:
+        return self._name
+
+    @property
+    def native_value(self):
+        return self._native_value
+
+    async def async_update(self):
+        ip = await self._sensor.get_ipv6_address()
+
+        if ip != "":
+            self.native_value = ip
+
+    async def async_added_to_hass(self) -> None:
+        """Restore native_value on reload"""
+        await super().async_added_to_hass()
+        if (last_sensor_data := await self.async_get_last_sensor_data()) is not None:
+            self._native_value = last_sensor_data.native_value
+            _LOGGER.info(
+                f"After re-adding, loaded ip address sensor state value for {self._device_id}: {self._native_value}"
+            )
