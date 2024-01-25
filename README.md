@@ -9,7 +9,7 @@ Example `configuration.yaml` entry
 ```
 sensor:
     - platform: ionos_dns_updater
-      todo: False
+      name: testtest
 ```
 
 -   `todo`: Todo duh

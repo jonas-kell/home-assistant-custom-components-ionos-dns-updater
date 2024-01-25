@@ -18,7 +18,7 @@ from homeassistant.const import (
 )
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
-from homeassistant.helpers.typing import ConfigType
+from homeassistant.helpers.typing import ConfigType, DiscoveryInfoType
 from homeassistant.components.network import async_get_enabled_source_ips
 
 import aiohttp
@@ -45,7 +45,9 @@ async def async_setup_platform(
     hass: HomeAssistant,
     config: ConfigType,
     add_entities: AddEntitiesCallback,
-) -> None:
+    discovery_info: DiscoveryInfoType | None = None,
+) -> None:   
+
     test = LocalInterface(hass)
     await test.get_ipv6_address()
 
