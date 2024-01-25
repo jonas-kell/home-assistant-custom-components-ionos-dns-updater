@@ -139,5 +139,5 @@ class IpSensor(RestoreSensor):
         if (last_sensor_data := await self.async_get_last_sensor_data()) is not None:
             self._native_value = last_sensor_data.native_value
             _LOGGER.info(
-                f"After re-adding, loaded ip address sensor state value for {self._entitiy_id}: {self._native_value}"
+                f"After re-adding, loaded ip address sensor state value for {self._name}: {self._native_value}"
             )
