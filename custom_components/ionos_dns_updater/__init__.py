@@ -1,0 +1,1 @@
+"""Ionos DNS Updater"""

@@ -1,0 +1,14 @@
+{
+    "domain": "ionos_dns_updater",
+    "name": "Ionos Dns Updater",
+    "version": "0.0.1",
+    "documentation": "https://github.com/jonas-kell/home-assistant-custom-components-ionos-dns-updater/README.md",
+    "requirements": [],
+    "dependencies": [],
+    "after_dependencies": ["http"],
+    "codeowners": ["@jonas-kell"],
+    "iot_class": "cloud_polling",
+    "loggers": [],
+    "issue_tracker": "https://github.com/jonas-kell/home-assistant-custom-components-ionos-dns-updater/issues",
+    "integration_type": "service"
+}
