@@ -71,7 +71,6 @@ class LocalInterface(GetIpInterface):
         for ip in ips:
             if isinstance(ip, IPv6Address):
                 if ip.is_global:
-                    _LOGGER.error("Found a global ip address")
                     out_ip = str(ip).split('%', 1)[0] # this does something like ...aaaa:ffff%0 for the interface. Sadly this kills its own functions, lol
 
         if out_ip == "":
@@ -134,7 +133,7 @@ class IpSensor(RestoreSensor):
         ip = await self._sensor.get_ipv6_address()
 
         if ip != "":
-            self.native_value = ip
+            self._native_value = ip
 
     async def async_added_to_hass(self) -> None:
         """Restore native_value on reload"""
