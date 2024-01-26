@@ -359,6 +359,9 @@ class IonosDNSUpdater(DNSUpdater):
                     f"Used the IONOS DNS API to set the AAAA entry for {self._domain} to {local_address_short}"
                 )
 
+                # update the sensor value
+                self._dns_sensor._native_value = local_address_short
+
             return status
 
         return False
