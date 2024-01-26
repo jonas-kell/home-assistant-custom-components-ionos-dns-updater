@@ -28,6 +28,7 @@ CONF_PREFIX: Final = "prefix"
 CONF_ENCRYPTION: Final = "encryption"
 CONF_LOG_HTTP_ERRORS: Final = "log_http_errors"
 CONF_DNS_API_TIMEOUT: Final = "dns_api_timeout"
+CONF_TTL: Final = "time_to_live"
 
 # Validation of the user's configuration
 PLATFORM_SCHEMA = PLATFORM_SCHEMA.extend(
@@ -38,6 +39,7 @@ PLATFORM_SCHEMA = PLATFORM_SCHEMA.extend(
         vol.Optional(CONF_ENCRYPTION, default=""): cv.string,
         vol.Optional(CONF_LOG_HTTP_ERRORS, default=False): cv.boolean,
         vol.Optional(CONF_DNS_API_TIMEOUT, default=10): cv.positive_int,
+        vol.Optional(CONF_TTL, default=300): cv.positive_int,
     }
 )
 
@@ -54,6 +56,7 @@ async def async_setup_platform(
     encryption = config[CONF_ENCRYPTION]
     log_http_errors = config[CONF_LOG_HTTP_ERRORS]
     dns_api_timeout = config[CONF_DNS_API_TIMEOUT]
+    time_to_live = config[CONF_TTL]
 
     local_sensor = IpSensor(LocalInterface(hass), "ipv6_address_local")
     dns_sensor = IpSensor(IonosInterface(domain), "ipv6_address_dns_lookup")
@@ -66,6 +69,7 @@ async def async_setup_platform(
         dns_sensor,
         log_http_errors,
         dns_api_timeout,
+        time_to_live,
     )
     dns_sensor.set_updater(dns_updater)
 
@@ -250,6 +254,7 @@ class IonosDNSUpdater(DNSUpdater):
     _zone_id: Optional[str]
     _record_id: Optional[str]
     _attempt_update: bool
+    _time_to_live: int
 
     async def initialize_ids(self) -> None:
         # INIT the zone and record id
@@ -302,6 +307,7 @@ class IonosDNSUpdater(DNSUpdater):
         dns_sensor: IpSensor,
         log_http_errors: bool,
         dns_api_timeout: int,
+        time_to_live: int,
     ):
         self = cls(log_http_errors, dns_api_timeout)
 
@@ -311,6 +317,7 @@ class IonosDNSUpdater(DNSUpdater):
         self._local_sensor = local_sensor
         self._encryption = encryption
         self._prefix = prefix
+        self._time_to_live = time_to_live
 
         self._auth_header_key = "X-API-Key"
         self._auth_header = f"{self._prefix}.{self._encryption}"
@@ -354,7 +361,7 @@ class IonosDNSUpdater(DNSUpdater):
                     self._auth_header_key: self._auth_header,
                     "Content-Type": "application/json",
                 },
-                f'{{"disabled": false, "content": "{local_address_short}", "ttl": 3600, "prio": 0}}',
+                f'{{"disabled": false, "content": "{local_address_short}", "ttl": {self._time_to_live}, "prio": 0}}',
             )
             if status:
                 _LOGGER.info(
