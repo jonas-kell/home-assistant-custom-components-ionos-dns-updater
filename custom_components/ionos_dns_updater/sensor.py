@@ -27,6 +27,7 @@ CONF_ZONE_DOMAIN: Final = "zone_domain"
 CONF_PREFIX: Final = "prefix"
 CONF_ENCRYPTION: Final = "encryption"
 CONF_LOG_HTTP_ERRORS: Final = "log_http_errors"
+CONF_DNS_API_TIMEOUT: Final = "dns_api_timeout"
 
 # Validation of the user's configuration
 PLATFORM_SCHEMA = PLATFORM_SCHEMA.extend(
@@ -36,6 +37,7 @@ PLATFORM_SCHEMA = PLATFORM_SCHEMA.extend(
         vol.Optional(CONF_PREFIX, default=""): cv.string,
         vol.Optional(CONF_ENCRYPTION, default=""): cv.string,
         vol.Optional(CONF_LOG_HTTP_ERRORS, default=False): cv.boolean,
+        vol.Optional(CONF_DNS_API_TIMEOUT, default=10): cv.positive_int,
     }
 )
 
@@ -51,6 +53,7 @@ async def async_setup_platform(
     prefix = config[CONF_PREFIX]
     encryption = config[CONF_ENCRYPTION]
     log_http_errors = config[CONF_LOG_HTTP_ERRORS]
+    dns_api_timeout = config[CONF_DNS_API_TIMEOUT]
 
     local_sensor = IpSensor(LocalInterface(hass), "ipv6_address_local")
     dns_sensor = IpSensor(IonosInterface(domain), "ipv6_address_dns_lookup")
@@ -62,6 +65,7 @@ async def async_setup_platform(
         local_sensor,
         dns_sensor,
         log_http_errors,
+        dns_api_timeout,
     )
     dns_sensor.set_updater(dns_updater)
 
@@ -296,8 +300,9 @@ class IonosDNSUpdater(DNSUpdater):
         local_sensor: IpSensor,
         dns_sensor: IpSensor,
         log_http_errors: bool,
+        dns_api_timeout: int,
     ):
-        self = cls(log_http_errors, 3)
+        self = cls(log_http_errors, dns_api_timeout)
 
         self._domain = domain
         self._zone_domain = zone_domain
