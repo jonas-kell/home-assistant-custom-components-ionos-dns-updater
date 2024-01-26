@@ -1,7 +1,7 @@
 {
     "domain": "ionos_dns_updater",
     "name": "Ionos Dns Updater",
-    "version": "0.1.3",
+    "version": "0.1.4",
     "documentation": "https://github.com/jonas-kell/home-assistant-custom-components-ionos-dns-updater/README.md",
     "requirements": [],
     "dependencies": [],

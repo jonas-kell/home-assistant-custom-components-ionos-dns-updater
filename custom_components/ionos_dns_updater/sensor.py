@@ -249,6 +249,7 @@ class IonosDNSUpdater(DNSUpdater):
     _auth_header: str
     _zone_id: Optional[str]
     _record_id: Optional[str]
+    _attempt_update: bool
 
     async def initialize_ids(self) -> None:
         # INIT the zone and record id
@@ -316,7 +317,10 @@ class IonosDNSUpdater(DNSUpdater):
 
         self._zone_id = None
         self._record_id = None
-        if self._zone_domain != "" and self._encryption != "" and self._prefix != "":
+        self._attempt_update = (
+            self._zone_domain != "" and self._encryption != "" and self._prefix != ""
+        )
+        if self._attempt_update:
             await self.initialize_ids()
         else:
             _LOGGER.warning(
@@ -326,6 +330,13 @@ class IonosDNSUpdater(DNSUpdater):
         return self
 
     async def update_ipv6_address_entry(self) -> bool:
+        if not self._attempt_update:
+            return False
+        if self._zone_id is None or self._record_id is None:
+            _LOGGER.error(
+                f"Tried to update, but either _zone_id or _record_id are none..."
+            )
+
         local_address = IPv6Address(self._local_sensor.native_value)
         dns_address = IPv6Address(self._dns_sensor.native_value)
         local_address_short = str(local_address.compressed)
