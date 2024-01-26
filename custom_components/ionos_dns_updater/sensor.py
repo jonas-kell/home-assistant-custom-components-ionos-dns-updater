@@ -227,7 +227,7 @@ class DNSUpdater:
 
         if status_code != 200 and status_code != 201:
             _LOGGER.error(
-                f"Could connect to DNS update API but returned status code {status_code}"
+                f"Could connect to DNS update API but returned status code {status_code} {json}"
             )
             return False, {}
 
@@ -284,7 +284,7 @@ class IonosDNSUpdater(DNSUpdater):
             _LOGGER.error(f"Parsing exception {type(ex).__name__}, {str(ex.args)}")
 
         if not got_all:
-            _LOGGER.warn(f"DNS updater initialization never fount all necessary ids")
+            _LOGGER.warning(f"DNS updater initialization never found all necessary ids")
 
     @classmethod
     async def initialize_instance_async(
@@ -314,7 +314,7 @@ class IonosDNSUpdater(DNSUpdater):
         if self._zone_domain != "" and self._encryption != "" and self._prefix != "":
             await self.initialize_ids()
         else:
-            _LOGGER.warn(
+            _LOGGER.warning(
                 f"Some of the Update-required psoperties are not set. Therefore dns updater integration only provides the sensors in read mode."
             )
 
