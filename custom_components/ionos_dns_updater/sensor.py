@@ -311,7 +311,16 @@ class IonosDNSUpdater(DNSUpdater):
 
         self._zone_id = None
         self._record_id = None
-        await self.initialize_ids()
+        if (
+            self._zone_domain is not ""
+            and self._encryption is not ""
+            and self._prefix is not ""
+        ):
+            await self.initialize_ids()
+        else:
+            _LOGGER.warn(
+                f"Some of the Update-required psoperties are not set. Therefore dns updater integration only provides the sensors in read mode."
+            )
 
         return self
 
