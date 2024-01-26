@@ -335,7 +335,7 @@ class IonosDNSUpdater(DNSUpdater):
             )
             if status:
                 _LOGGER.info(
-                    f"Used the IONOS DNS API to set the AAA entry for {self._domain} to {local_address_short}"
+                    f"Used the IONOS DNS API to set the AAAA entry for {self._domain} to {local_address_short}"
                 )
 
             return status
