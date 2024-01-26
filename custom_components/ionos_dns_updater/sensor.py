@@ -344,7 +344,9 @@ class IonosDNSUpdater(DNSUpdater):
 
         if local_address_short != dns_address_short:
             # differs, should be updated
-            _LOGGER.info(f"Attempting update of DNS entry on IONOS API")
+            _LOGGER.info(
+                f"Attempting update of DNS entry on IONOS API {local_address_short} -> {dns_address_short}"
+            )
             status, _ = await self.request(
                 f"https://api.hosting.ionos.com/dns/v1/zones/{self._zone_id}/records/{self._record_id}",
                 "PUT",
