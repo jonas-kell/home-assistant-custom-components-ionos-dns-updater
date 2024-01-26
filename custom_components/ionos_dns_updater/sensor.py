@@ -311,11 +311,7 @@ class IonosDNSUpdater(DNSUpdater):
 
         self._zone_id = None
         self._record_id = None
-        if (
-            self._zone_domain is not ""
-            and self._encryption is not ""
-            and self._prefix is not ""
-        ):
+        if self._zone_domain != "" and self._encryption != "" and self._prefix != "":
             await self.initialize_ids()
         else:
             _LOGGER.warn(
