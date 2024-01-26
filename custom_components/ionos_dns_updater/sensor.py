@@ -9,9 +9,7 @@ from homeassistant.components.sensor import (
     PLATFORM_SCHEMA,
     RestoreSensor,
 )
-from homeassistant.const import (
-    CONF_DOMAIN
-)
+from homeassistant.const import CONF_DOMAIN
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.typing import ConfigType, DiscoveryInfoType
@@ -19,6 +17,7 @@ from homeassistant.components.network import async_get_enabled_source_ips, IPv6A
 
 import aiohttp
 from typing import Literal
+from typing import Optional
 import socket
 
 _LOGGER = logging.getLogger(__name__)
@@ -38,15 +37,19 @@ async def async_setup_platform(
     config: ConfigType,
     add_entities: AddEntitiesCallback,
     discovery_info: DiscoveryInfoType | None = None,
-) -> None:   
-
+) -> None:
     domain = config[CONF_DOMAIN]
+    prefix = config[CONF_DOMAIN]
+    encryption = config[CONF_DOMAIN]
+
+    local_sensor = IpSensor(LocalInterface(hass), "ipv6_address_local")
+    dns_sensor = IpSensor(IonosInterface(domain), "ipv6_address_dns_lookup")
+    dns_updater = IonosDNSUpdater(domain, prefix, encryption, local_sensor, dns_sensor)
+    dns_sensor.set_updater(dns_updater)
 
     # Add entities
-    add_entities(
-        IpSensor(interf, unique_id)
-        for interf, unique_id in [(LocalInterface(hass), "ipv6_address_local"), (IonosInterface(domain), "ipv6_address_dns_lookup")]
-    )
+    add_entities([local_sensor, dns_sensor])
+
 
 class GetIpInterface:
     def __init__(self) -> None:
@@ -55,8 +58,10 @@ class GetIpInterface:
     async def get_ipv6_address(self) -> str:
         return ""
 
-    def get_sensor_type(self) -> Literal["ipv6_address_local", "ipv6_address_dns_lookup"]:
-        pass
+    def get_sensor_type(
+        self,
+    ) -> Literal["ipv6_address_local", "ipv6_address_dns_lookup"]:
+        return "ipv6_address_local"
 
 
 class LocalInterface(GetIpInterface):
@@ -66,29 +71,34 @@ class LocalInterface(GetIpInterface):
 
     async def get_ipv6_address(self) -> str:
         ips = await async_get_enabled_source_ips(self._hass)
-        
+
         out_ip: str = ""
         for ip in ips:
             if isinstance(ip, IPv6Address):
                 if ip.is_global:
-                    out_ip = str(ip).split('%', 1)[0] # this does something like ...aaaa:ffff%0 for the interface. Sadly this kills its own functions, lol
+                    out_ip = str(ip).split("%", 1)[
+                        0
+                    ]  # this does something like ...aaaa:ffff%0 for the interface. Sadly this kills its own functions, lol
 
         if out_ip == "":
             _LOGGER.error("Local Platform could not detect configured ipv6 address")
 
         return out_ip
-    
-    def get_sensor_type(self) -> Literal["ipv6_address_local", "ipv6_address_dns_lookup"]:
+
+    def get_sensor_type(
+        self,
+    ) -> Literal["ipv6_address_local", "ipv6_address_dns_lookup"]:
         return "ipv6_address_local"
 
+
 class IonosInterface(GetIpInterface):
-    def __init__(self, url:str) -> None:
+    def __init__(self, url: str) -> None:
         self._url = url
         super().__init__()
 
     async def get_ipv6_address(self) -> str:
         out_ip: str = ""
-        
+
         try:
             out_ip = socket.getaddrinfo(self._url, None, socket.AF_INET6)[0][4][0]
         except Exception as e:
@@ -98,10 +108,13 @@ class IonosInterface(GetIpInterface):
             _LOGGER.error("Remote Platform could not resolve ipv6 address from dns")
 
         return out_ip
-    
-    def get_sensor_type(self) -> Literal["ipv6_address_local", "ipv6_address_dns_lookup"]:
+
+    def get_sensor_type(
+        self,
+    ) -> Literal["ipv6_address_local", "ipv6_address_dns_lookup"]:
         return "ipv6_address_dns_lookup"
-    
+
+
 class IpSensor(RestoreSensor):
     """Ip address Sensor"""
 
@@ -116,10 +129,13 @@ class IpSensor(RestoreSensor):
         unique_id: str,
     ) -> None:
         self._sensor = sensor
-        self._name = "IPv6 Address" + " " + self.name_additions[sensor.get_sensor_type()]
+        self._name = (
+            "IPv6 Address" + " " + self.name_additions[sensor.get_sensor_type()]
+        )
         self._attr_unique_id = unique_id
 
         self._native_value = ""
+        self._updater: Optional[DNSUpdater] = None
 
     @property
     def name(self) -> str:
@@ -135,6 +151,13 @@ class IpSensor(RestoreSensor):
         if ip != "":
             self._native_value = ip
 
+        # Perform update if necessary
+        if self._updater is not None:
+            await self._updater.update_ipv6_address_entry()
+
+    def set_updater(self, updater: DNSUpdater):
+        self._updater = updater
+
     async def async_added_to_hass(self) -> None:
         """Restore native_value on reload"""
         await super().async_added_to_hass()
@@ -143,3 +166,41 @@ class IpSensor(RestoreSensor):
             _LOGGER.info(
                 f"After re-adding, loaded ip address sensor state value for {self._attr_unique_id}: {self._native_value}"
             )
+
+
+class DNSUpdater:
+    def __init__(self) -> None:
+        pass
+
+    async def update_ipv6_address_entry(self) -> bool:
+        return False
+
+
+class IonosDNSUpdater(DNSUpdater):
+    def __init__(
+        self,
+        domain: str,
+        prefix: str,
+        encryption: str,
+        local_sensor: IpSensor,
+        dns_sensor: IpSensor,
+    ) -> None:
+        self._domain = domain
+        self._dns_sensor = dns_sensor
+        self._local_sensor = local_sensor
+        self._encryption = encryption
+        self._prefix = prefix
+        super().__init__()
+
+    async def update_ipv6_address_entry(self) -> bool:
+        local_address = IPv6Address(self._local_sensor.native_value)
+        dns_address = IPv6Address(self._dns_sensor.native_value)
+        local_address_short = str(local_address.compressed)
+        dns_address_short = str(dns_address.compressed)
+
+        if local_address_short != dns_address_short:
+            _LOGGER.error(
+                f"local address {local_address_short} doesn't match {dns_address_short}"
+            )
+
+        return True
