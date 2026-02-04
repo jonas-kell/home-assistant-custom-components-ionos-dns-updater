@@ -29,3 +29,5 @@ sensor:
 ## How to generate an API token
 
 Go to [API keys manager](https://developer.hosting.ionos.de/keys).
+
+This is derived from [this API](https://developer.hosting.ionos.de/docs).
