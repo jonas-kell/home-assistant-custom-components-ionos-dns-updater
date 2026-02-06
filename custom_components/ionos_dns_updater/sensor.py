@@ -11,13 +11,13 @@ from homeassistant.components.sensor import (
     RestoreSensor,
 )
 from homeassistant.const import CONF_DOMAIN
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, State
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.typing import ConfigType, DiscoveryInfoType
 from homeassistant.components.network import async_get_enabled_source_ips, IPv6Address
 
 import aiohttp
-from typing import Literal, Optional, Dict
+from typing import Literal, Optional, Dict, List
 import socket
 
 _LOGGER = logging.getLogger(__name__)
@@ -82,7 +82,8 @@ class GetIpInterface:
     def __init__(self) -> None:
         pass
 
-    async def get_ipv6_address(self) -> str:
+    async def get_ipv6_address(self, except_ips_shortened: List[str]) -> str:
+        _ = except_ips_shortened
         return ""
 
     def get_sensor_type(
@@ -96,29 +97,41 @@ class LocalInterface(GetIpInterface):
         self._hass = hass
         super().__init__()
 
-    async def get_ipv6_address(self) -> str:
+    async def get_ipv6_address(self, except_ips_shortened: List[str]) -> str:
         ips = await async_get_enabled_source_ips(self._hass)
 
-        out_ip: str = ""
-        count = 0
+        possibilities = []
         for ip in ips:
             if isinstance(ip, IPv6Address):
                 if ip.is_global:
-                    if out_ip == "":
-                        out_ip = str(ip).split("%", 1)[
-                            0
-                        ]  # this does something like ...aaaa:ffff%0 for the interface. Sadly this kills its own functions, lol
-                    count += 1
+                    out_ip = str(ip).split("%", 1)[
+                        0
+                    ]  # this does something like ...aaaa:ffff%0 for the interface. Sadly this kills its own functions, lol
+                    out_ip_ip = IPv6Address(out_ip)
+                    out_ip_short = str(out_ip_ip.compressed)
+                    possibilities.append(out_ip_short)
 
-                    # it seems as if the first address might be the "new" one - there will be multiple
-                    # TODO it would be better, if we detect multiple addresses and see if there is one that is not upstream       issue: #1
-        if count > 0:
-            _LOGGER.error(f"Detected {count} possible IPv6 adresses")
+        if len(possibilities) == 1:
+            return possibilities[0]
 
-        if out_ip == "":
-            _LOGGER.error("Local Platform could not detect configured ipv6 address")
+        if len(possibilities) > 1:
+            _LOGGER.error(f"Detected {len(possibilities)} possible IPv6 adresses")
 
-        return out_ip
+            filtered_results = []
+            for test_ip in possibilities:
+                if not (test_ip in except_ips_shortened):
+                    filtered_results.append(test_ip)
+
+            if len(filtered_results) == 1:
+                _LOGGER.info("Could determine definite ip after previous value filter")
+                return filtered_results[0]
+
+            # Fallback return the first one from the list
+            _LOGGER.error(f"Possibilites Fallback")
+            return possibilities[0]
+
+        _LOGGER.error("Local Platform could not detect configured ipv6 address")
+        return ""
 
     def get_sensor_type(
         self,
@@ -131,7 +144,8 @@ class IonosInterface(GetIpInterface):
         self._url = url
         super().__init__()
 
-    async def get_ipv6_address(self) -> str:
+    async def get_ipv6_address(self, except_ips_shortened: List[str]) -> str:
+        _ = except_ips_shortened
         out_ip: str = ""
 
         try:
@@ -171,6 +185,13 @@ class IpSensor(RestoreSensor):
 
         self._native_value = ""
         self._updater: Optional[DNSUpdater] = None
+        self._previous_native_value: Optional[str] = None
+
+    @property
+    def extra_state_attributes(self):
+        return {
+            "previous_native_value": self._previous_native_value,
+        }
 
     @property
     def name(self) -> str:
@@ -181,10 +202,44 @@ class IpSensor(RestoreSensor):
         return self._native_value
 
     async def async_update(self):
-        ip = await self._sensor.get_ipv6_address()
+        filter_arr = []
+        if (
+            self._previous_native_value != ""
+            and self._previous_native_value is not None
+        ):
+            filter_arr.append(self._previous_native_value)
+
+        ip = await self._sensor.get_ipv6_address(filter_arr)
 
         if ip != "":
-            self._native_value = ip
+            if (
+                self._previous_native_value != ""
+                and self._previous_native_value is not None
+            ):
+                try:
+                    prev_address = IPv6Address(self._previous_native_value)
+                    current_address = IPv6Address(self._native_value)
+                    new_address = IPv6Address(ip)
+                    prev_address_short = str(prev_address.compressed)
+                    current_address_short = str(current_address.compressed)
+                    new_address_short = str(new_address.compressed)
+
+                    if new_address_short != current_address_short:
+                        self._previous_native_value = current_address_short
+                        self._native_value = new_address_short
+                        _LOGGER.info(
+                            f"Sensor detected a change - rotation: {prev_address_short} <- {current_address_short} <- {new_address_short}"
+                        )
+
+                except:
+                    _LOGGER.info(
+                        f"Error when updating addresses: {self._previous_native_value} - {self._native_value} - {ip}"
+                    )
+            else:
+                _LOGGER.info(f"Empty previous_native_value - initializing to current")
+                current_address = IPv6Address(self._native_value)
+                current_address_short = str(current_address.compressed)
+                self._previous_native_value = current_address_short
 
         # Perform update if necessary
         if self._updater is not None:
@@ -196,11 +251,26 @@ class IpSensor(RestoreSensor):
     async def async_added_to_hass(self) -> None:
         """Restore native_value on reload"""
         await super().async_added_to_hass()
-        if (last_sensor_data := await self.async_get_last_sensor_data()) is not None:
-            self._native_value = last_sensor_data.native_value
-            _LOGGER.info(
-                f"After re-adding, loaded ip address sensor state value for {self._attr_unique_id}: {self._native_value}"
-            )
+
+        last_state: State | None = await self.async_get_last_state()
+        if last_state is None:
+            return
+
+        # Restore native_value
+        if last_state.state not in (None, "unknown", "unavailable"):
+            self._native_value = last_state.state
+
+        # Restore attribute
+        prev_state_val = last_state.attributes.get("previous_native_value")
+        if prev_state_val not in (None, "unknown", "unavailable"):
+            self._previous_native_value = prev_state_val
+
+        _LOGGER.info(
+            "Restored IP sensor %s: value=%s prev_value=%s",
+            self._attr_unique_id,
+            self._native_value,
+            self._previous_native_value,
+        )
 
 
 class DNSUpdater:
