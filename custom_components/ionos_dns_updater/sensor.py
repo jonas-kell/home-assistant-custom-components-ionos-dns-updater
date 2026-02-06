@@ -115,7 +115,9 @@ class LocalInterface(GetIpInterface):
             return possibilities[0]
 
         if len(possibilities) > 1:
-            _LOGGER.error(f"Detected {len(possibilities)} possible IPv6 adresses")
+            _LOGGER.error(
+                f"Detected {len(possibilities)} possible IPv6 adresses, {possibilities} exept: {except_ips_shortened}"
+            )
 
             filtered_results = []
             for test_ip in possibilities:
@@ -202,6 +204,10 @@ class IpSensor(RestoreSensor):
         return self._native_value
 
     async def async_update(self):
+        _LOGGER.info(
+            f"Attempting update {self._attr_unique_id}: prev = {self._previous_native_value}, curr = {self._native_value}"
+        )
+
         filter_arr = []
         if (
             self._previous_native_value != ""
