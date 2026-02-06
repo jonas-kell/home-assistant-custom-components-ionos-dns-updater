@@ -383,7 +383,5 @@ class IonosDNSUpdater(DNSUpdater):
                 self._dns_sensor._native_value = local_address_short
 
             return status
-        else:
-            _LOGGER.info(f"Adresses are both {dns_address_short} no update necessary")
-
+        _LOGGER.info(f"Adresses are both {dns_address_short} no update necessary")
         return False
