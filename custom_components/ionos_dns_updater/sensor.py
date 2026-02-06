@@ -246,6 +246,7 @@ class IpSensor(RestoreSensor):
                 current_address = IPv6Address(self._native_value)
                 current_address_short = str(current_address.compressed)
                 self._previous_native_value = current_address_short
+                self._native_value = current_address_short  # might need to be migrated to be stored shortened - but it is expected to be a real ipv6 address, if we made it into this branch
 
         # Perform update if necessary
         if self._updater is not None:
@@ -456,6 +457,7 @@ class IonosDNSUpdater(DNSUpdater):
                 )
 
                 # update the sensor value
+                self._dns_sensor._previous_native_value = self._dns_sensor._native_value
                 self._dns_sensor._native_value = local_address_short
 
             return status
