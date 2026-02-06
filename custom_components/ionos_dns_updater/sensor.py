@@ -100,14 +100,20 @@ class LocalInterface(GetIpInterface):
         ips = await async_get_enabled_source_ips(self._hass)
 
         out_ip: str = ""
+        count = 0
         for ip in ips:
             if isinstance(ip, IPv6Address):
                 if ip.is_global:
-                    out_ip = str(ip).split("%", 1)[
-                        0
-                    ]  # this does something like ...aaaa:ffff%0 for the interface. Sadly this kills its own functions, lol
-                    break  # it seems as if the first address might be the "new" one - there will be multiple
+                    if out_ip == "":
+                        out_ip = str(ip).split("%", 1)[
+                            0
+                        ]  # this does something like ...aaaa:ffff%0 for the interface. Sadly this kills its own functions, lol
+                    count += 1
+
+                    # it seems as if the first address might be the "new" one - there will be multiple
                     # TODO it would be better, if we detect multiple addresses and see if there is one that is not upstream       issue: #1
+        if count > 0:
+            _LOGGER.error(f"Detected {count} possible IPv6 adresses")
 
         if out_ip == "":
             _LOGGER.error("Local Platform could not detect configured ipv6 address")
@@ -334,12 +340,14 @@ class IonosDNSUpdater(DNSUpdater):
             await self.initialize_ids()
         else:
             _LOGGER.warning(
-                f"Some of the Update-required psoperties are not set. Therefore dns updater integration only provides the sensors in read mode."
+                f"Some of the Update-required properties are not set. Therefore dns updater integration only provides the sensors in read mode."
             )
 
         return self
 
     async def update_ipv6_address_entry(self) -> bool:
+        _LOGGER.info(f"Checking for necessary update of ipv6 address")
+
         if not self._attempt_update:
             return False
         if self._zone_id is None or self._record_id is None:
@@ -375,5 +383,7 @@ class IonosDNSUpdater(DNSUpdater):
                 self._dns_sensor._native_value = local_address_short
 
             return status
+        else:
+            _LOGGER.info(f"Adresses are both {dns_address_short} no update necessary")
 
         return False
