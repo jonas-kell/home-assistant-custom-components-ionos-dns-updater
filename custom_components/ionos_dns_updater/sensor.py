@@ -1,4 +1,5 @@
 """Platform for dns updater integration."""
+
 from __future__ import annotations
 
 import logging
@@ -105,6 +106,8 @@ class LocalInterface(GetIpInterface):
                     out_ip = str(ip).split("%", 1)[
                         0
                     ]  # this does something like ...aaaa:ffff%0 for the interface. Sadly this kills its own functions, lol
+                    break  # it seems as if the first address might be the "new" one - there will be multiple
+                    # TODO it would be better, if we detect multiple addresses and see if there is one that is not upstream       issue: #1
 
         if out_ip == "":
             _LOGGER.error("Local Platform could not detect configured ipv6 address")
