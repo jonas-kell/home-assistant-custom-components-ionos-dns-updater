@@ -431,6 +431,7 @@ class IonosDNSUpdater(DNSUpdater):
             _LOGGER.error(
                 f"Tried to update, but either _zone_id or _record_id are none..."
             )
+            return False
 
         local_address = IPv6Address(self._local_sensor.native_value)
         dns_address = IPv6Address(self._dns_sensor.native_value)
