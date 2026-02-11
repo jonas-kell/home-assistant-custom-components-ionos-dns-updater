@@ -82,8 +82,11 @@ class GetIpInterface:
     def __init__(self) -> None:
         pass
 
-    async def get_ipv6_address(self, except_ips_shortened: List[str]) -> str:
-        _ = except_ips_shortened
+    async def get_ipv6_address(
+        self, previous_ip: str | None, current_ip: str | None
+    ) -> str:
+        _ = previous_ip
+        _ = current_ip
         return ""
 
     def get_sensor_type(
@@ -97,7 +100,9 @@ class LocalInterface(GetIpInterface):
         self._hass = hass
         super().__init__()
 
-    async def get_ipv6_address(self, except_ips_shortened: List[str]) -> str:
+    async def get_ipv6_address(
+        self, previous_ip: str | None, current_ip: str | None
+    ) -> str:
         ips = await async_get_enabled_source_ips(self._hass)
 
         possibilities = []
@@ -116,21 +121,37 @@ class LocalInterface(GetIpInterface):
             return possibilities[0]
 
         if len(possibilities) > 1:
-            _LOGGER.error(
-                f"Detected {len(possibilities)} possible IPv6 adresses, {possibilities} exept: {except_ips_shortened}"
+            _LOGGER.warning(
+                f"Detected {len(possibilities)} possible IPv6 adresses, {possibilities} exept logic with p->{previous_ip} c->{current_ip}"
             )
 
             filtered_results = []
-            for test_ip in possibilities:
-                if not (test_ip in except_ips_shortened):
-                    filtered_results.append(test_ip)
+            if previous_ip is not None and current_ip is not None:
+                if previous_ip in possibilities:
+                    _LOGGER.warning(
+                        "Previous ip in possibilities -> we are after the update -> ignore the previous one"
+                    )
+                    for test_ip in possibilities:
+                        if test_ip != previous_ip:
+                            filtered_results.append(test_ip)
+                else:
+                    _LOGGER.warning(
+                        "Previous ip NOT in possibilities -> we are before the update -> ignore the current one"
+                    )
+                    for test_ip in possibilities:
+                        if test_ip != current_ip:
+                            filtered_results.append(test_ip)
+            else:
+                _LOGGER.error(
+                    "None value in curr or prev. Could not do advanced ip detection logic"
+                )
 
             if len(filtered_results) == 1:
                 _LOGGER.info("Could determine definite ip after previous value filter")
                 return filtered_results[0]
 
             # Fallback return the first one from the list
-            _LOGGER.error(f"Possibilites Fallback")
+            _LOGGER.error("Possibilites Fallback")
             return possibilities[0]
 
         _LOGGER.error("Local Platform could not detect configured ipv6 address")
@@ -147,8 +168,12 @@ class IonosInterface(GetIpInterface):
         self._url = url
         super().__init__()
 
-    async def get_ipv6_address(self, except_ips_shortened: List[str]) -> str:
-        _ = except_ips_shortened
+    async def get_ipv6_address(
+        self, previous_ip: str | None, current_ip: str | None
+    ) -> str:
+        _ = previous_ip
+        _ = current_ip
+
         out_ip: str = ""
 
         try:
@@ -209,14 +234,18 @@ class IpSensor(RestoreSensor):
             f"Attempting update {self._attr_unique_id}: prev = {self._previous_native_value}, curr = {self._native_value}"
         )
 
-        filter_arr = []
+        previous_override = None
         if (
             self._previous_native_value != ""
             and self._previous_native_value is not None
         ):
-            filter_arr.append(self._previous_native_value)
+            previous_override = self._previous_native_value
 
-        ip = await self._sensor.get_ipv6_address(filter_arr)
+        current_override = None
+        if self._native_value != "" and self._native_value is not None:
+            current_override = self._native_value
+
+        ip = await self._sensor.get_ipv6_address(previous_override, current_override)
 
         if ip != "":
             if (
@@ -430,8 +459,9 @@ class IonosDNSUpdater(DNSUpdater):
             return False
         if self._zone_id is None or self._record_id is None:
             _LOGGER.error(
-                f"Tried to update, but either _zone_id or _record_id are none..."
+                f"Tried to update, but either _zone_id or _record_id are none... As the settings for write-mode are set, something must have failed during initialize_ids (most likely wrong credentials)"
             )
+            await self.initialize_ids()
             return False
 
         local_address = IPv6Address(self._local_sensor.native_value)
