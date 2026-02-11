@@ -17,7 +17,7 @@ from homeassistant.helpers.typing import ConfigType, DiscoveryInfoType
 from homeassistant.components.network import async_get_enabled_source_ips, IPv6Address
 
 import aiohttp
-from typing import Literal, Optional, Dict, List
+from typing import Literal, Optional, Dict
 import socket
 
 _LOGGER = logging.getLogger(__name__)
