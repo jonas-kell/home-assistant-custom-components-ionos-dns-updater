@@ -112,6 +112,7 @@ class LocalInterface(GetIpInterface):
                     possibilities.append(out_ip_short)
 
         if len(possibilities) == 1:
+            _LOGGER.info(f"Local Sensor detected IP to be {possibilities[0]}")
             return possibilities[0]
 
         if len(possibilities) > 1:
