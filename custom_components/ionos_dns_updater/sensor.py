@@ -30,6 +30,9 @@ class DedupLogger:
         self._warned_messages: set[str] = set()
         self._dedup: bool = dedup
 
+        if self._dedup:
+            getattr(self._logger, "debug")("Only logging success messages once")
+
     def _log_once(self, level: str, msg: str) -> None:
         if self._dedup and level != "error":
 
