@@ -34,7 +34,7 @@ class DedupLogger:
             getattr(self._logger, "debug")("Only logging success messages once")
 
     def _log_once(self, level: str, msg: str) -> None:
-        getattr(self._logger, level)(f"test {msg}")
+        getattr(self._logger, level)(f"test {self._dedup} {msg}")
 
         if self._dedup and level != "error":
 
