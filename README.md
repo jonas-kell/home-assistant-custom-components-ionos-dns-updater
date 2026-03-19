@@ -14,6 +14,7 @@ sensor:
       prefix: XXXXXX
       encryption: YYYYY
       log_http_errors: False
+      log_duplicates: True
       dns_api_timeout: 10
       time_to_live: 300
 ```
@@ -23,6 +24,7 @@ sensor:
 - `prefix`: (Optional, defaults to ""), if you want to update the dns settings in the IONONS API, this defines the access prefix
 - `encryption`: (Optional, defaults to ""), if you want to update the dns settings in the IONONS API, this defines the access key
 - `log_http_errors`: (Optional, defaults to False), whether to log ALL http errors (many are recoverable and could spam logs if everything is working)
+- `log_duplicates`: (Optional, defaults to True), wheter to repeat a logged line
 - `dns_api_timeout`: (Optional, defaults to 10), correct to control the timeout of the DNS API
 - `time_to_live`: (Optional, defaults to 300), the ttl to be set for the dns entry
 

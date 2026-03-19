@@ -20,7 +20,44 @@ import aiohttp
 from typing import Literal, Optional, Dict
 import socket
 
-_LOGGER = logging.getLogger(__name__)
+
+class DedupLogger:
+    """Logger wrapper that ensures each message is only logged once."""
+
+    def __init__(self, logger: logging.Logger, dedup: bool) -> None:
+        self._logger = logger
+        self._seen_messages: set[str] = set()
+        self._warned_messages: set[str] = set()
+        self._dedup: bool = dedup
+
+    def _log_once(self, level: str, msg: str) -> None:
+        if self._dedup and level != "error":
+
+            if msg in self._seen_messages:
+                if msg not in self._warned_messages:
+                    getattr(self._logger, level)(
+                        f"Omitting message from now due to repeat: {msg}"
+                    )
+                    self._warned_messages.add(msg)
+
+                return
+
+            self._seen_messages.add(msg)
+
+        getattr(self._logger, level)(msg)
+
+    def info(self, msg: str) -> None:
+        self._log_once("info", msg)
+
+    def warning(self, msg: str) -> None:
+        self._log_once("warning", msg)
+
+    def error(self, msg: str) -> None:
+        self._log_once("error", msg)
+
+    def debug(self, msg: str) -> None:
+        self._log_once("debug", msg)
+
 
 DOMAIN: Final = "ionos_dns_updater"
 
@@ -28,8 +65,12 @@ CONF_ZONE_DOMAIN: Final = "zone_domain"
 CONF_PREFIX: Final = "prefix"
 CONF_ENCRYPTION: Final = "encryption"
 CONF_LOG_HTTP_ERRORS: Final = "log_http_errors"
+CONF_LOG_DUPLICATES: Final = "log_duplicates"
 CONF_DNS_API_TIMEOUT: Final = "dns_api_timeout"
 CONF_TTL: Final = "time_to_live"
+
+_BASE_LOGGER = logging.getLogger(__name__)
+_LOGGER = DedupLogger(_BASE_LOGGER, False)
 
 # Validation of the user's configuration
 PLATFORM_SCHEMA = PLATFORM_SCHEMA.extend(
@@ -39,6 +80,7 @@ PLATFORM_SCHEMA = PLATFORM_SCHEMA.extend(
         vol.Optional(CONF_PREFIX, default=""): cv.string,
         vol.Optional(CONF_ENCRYPTION, default=""): cv.string,
         vol.Optional(CONF_LOG_HTTP_ERRORS, default=False): cv.boolean,
+        vol.Optional(CONF_LOG_DUPLICATES, default=True): cv.boolean,
         vol.Optional(CONF_DNS_API_TIMEOUT, default=10): cv.positive_int,
         vol.Optional(CONF_TTL, default=300): cv.positive_int,
     }
@@ -51,13 +93,20 @@ async def async_setup_platform(
     add_entities: AddEntitiesCallback,
     discovery_info: DiscoveryInfoType | None = None,
 ) -> None:
+    global _LOGGER
+
+    _ = discovery_info
+
     domain = config[CONF_DOMAIN]
     zone_domain = config[CONF_ZONE_DOMAIN]
     prefix = config[CONF_PREFIX]
     encryption = config[CONF_ENCRYPTION]
     log_http_errors = config[CONF_LOG_HTTP_ERRORS]
+    log_duplicates = config[CONF_LOG_DUPLICATES]
     dns_api_timeout = config[CONF_DNS_API_TIMEOUT]
     time_to_live = config[CONF_TTL]
+
+    _LOGGER = DedupLogger(_BASE_LOGGER, not log_duplicates)
 
     local_sensor = IpSensor(LocalInterface(hass), "ipv6_address_local")
     dns_sensor = IpSensor(IonosInterface(domain), "ipv6_address_dns_lookup")
@@ -272,7 +321,7 @@ class IpSensor(RestoreSensor):
                         f"Error when updating addresses: {self._previous_native_value} - {self._native_value} - {ip}"
                     )
             else:
-                _LOGGER.info(f"Empty previous_native_value - initializing to current")
+                _LOGGER.info("Empty previous_native_value - initializing to current")
                 current_address = IPv6Address(self._native_value)
                 current_address_short = str(current_address.compressed)
                 self._previous_native_value = current_address_short
@@ -303,10 +352,7 @@ class IpSensor(RestoreSensor):
             self._previous_native_value = prev_state_val
 
         _LOGGER.info(
-            "Restored IP sensor %s: value=%s prev_value=%s",
-            self._attr_unique_id,
-            self._native_value,
-            self._previous_native_value,
+            f"Restored IP sensor {self._attr_unique_id}: value={self._native_value} prev_value={self._previous_native_value}",
         )
 
 
@@ -410,7 +456,7 @@ class IonosDNSUpdater(DNSUpdater):
             _LOGGER.error(f"Parsing exception {type(ex).__name__}, {str(ex.args)}")
 
         if not got_all:
-            _LOGGER.warning(f"DNS updater initialization never found all necessary ids")
+            _LOGGER.warning("DNS updater initialization never found all necessary ids")
 
     @classmethod
     async def initialize_instance_async(
@@ -447,19 +493,19 @@ class IonosDNSUpdater(DNSUpdater):
             await self.initialize_ids()
         else:
             _LOGGER.warning(
-                f"Some of the Update-required properties are not set. Therefore dns updater integration only provides the sensors in read mode."
+                "Some of the Update-required properties are not set. Therefore dns updater integration only provides the sensors in read mode."
             )
 
         return self
 
     async def update_ipv6_address_entry(self) -> bool:
-        _LOGGER.info(f"Checking for necessary update of ipv6 address")
+        _LOGGER.info("Checking for necessary update of ipv6 address")
 
         if not self._attempt_update:
             return False
         if self._zone_id is None or self._record_id is None:
             _LOGGER.error(
-                f"Tried to update, but either _zone_id or _record_id are none... As the settings for write-mode are set, something must have failed during initialize_ids (most likely wrong credentials)"
+                "Tried to update, but either _zone_id or _record_id are none... As the settings for write-mode are set, something must have failed during initialize_ids (most likely wrong credentials)"
             )
             await self.initialize_ids()
             return False
