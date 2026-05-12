@@ -324,11 +324,21 @@ class IpSensor(RestoreSensor):
                         f"Error when updating addresses: {self._previous_native_value} - {self._native_value} - {ip}"
                     )
             else:
-                _LOGGER.info("Empty previous_native_value - initializing to current")
-                current_address = IPv6Address(self._native_value)
-                current_address_short = str(current_address.compressed)
-                self._previous_native_value = current_address_short
-                self._native_value = current_address_short  # might need to be migrated to be stored shortened - but it is expected to be a real ipv6 address, if we made it into this branch
+                if self._native_value != "" and self._native_value is not None:
+                    _LOGGER.info(
+                        "Empty previous_native_value - initializing to current"
+                    )
+                    current_address = IPv6Address(self._native_value)
+                    current_address_short = str(current_address.compressed)
+                    self._previous_native_value = current_address_short
+                    self._native_value = current_address_short  # might need to be migrated to be stored shortened - but it is expected to be a real ipv6 address, if we made it into this branch
+                else:
+                    _LOGGER.info("Nothing has ever been set here. Bootstrapping")
+
+                    bootstrap_address = IPv6Address(ip)
+                    bootstrap_address_short = str(bootstrap_address.compressed)
+                    self._previous_native_value = bootstrap_address_short
+                    self._native_value = bootstrap_address_short
 
         # Perform update if necessary
         if self._updater is not None:
