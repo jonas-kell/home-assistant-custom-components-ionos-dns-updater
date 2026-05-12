@@ -524,11 +524,20 @@ class IonosDNSUpdater(DNSUpdater):
             return False
 
         local_address = IPv6Address(self._local_sensor.native_value)
-        dns_address = IPv6Address(self._dns_sensor.native_value)
         local_address_short = str(local_address.compressed)
-        dns_address_short = str(dns_address.compressed)
 
-        if local_address_short != dns_address_short:
+        equal = False
+        try:
+            dns_address = IPv6Address(self._dns_sensor.native_value)
+            dns_address_short = str(dns_address.compressed)
+            equal = local_address_short == dns_address_short
+        except Exception as ex:
+            _LOGGER.error(
+                f"Parsing exception {type(ex).__name__}, {str(ex.args)}. This should AT MOST happen on very first installation!"
+            )
+            # fails on first installation, because this value is empty
+
+        if not equal:
             # differs, should be updated
             _LOGGER.info(
                 f"Attempting update of DNS entry on IONOS API from {dns_address_short} -> {local_address_short}"
