@@ -231,7 +231,7 @@ class IonosInterface(GetIpInterface):
         try:
             out_ip = socket.getaddrinfo(self._url, None, socket.AF_INET6)[0][4][0]
         except Exception as e:
-            _LOGGER.error("DNS lookup failed: " + str(e))
+            _LOGGER.error(f"DNS lookup failed for '{self._url}': " + str(e))
 
         if out_ip == "":
             _LOGGER.error("Remote Platform could not resolve ipv6 address from dns")
