@@ -299,6 +299,10 @@ class IpSensor(RestoreSensor):
 
         ip = await self._sensor.get_ipv6_address(previous_override, current_override)
 
+        remote_malformed = False
+        if ip == "" and self._updater is not None:
+            remote_malformed = True
+
         if ip != "":
             if (
                 self._previous_native_value != ""
@@ -342,7 +346,7 @@ class IpSensor(RestoreSensor):
 
         # Perform update if necessary
         if self._updater is not None:
-            await self._updater.update_ipv6_address_entry()
+            await self._updater.update_ipv6_address_entry(remote_malformed)
 
     def set_updater(self, updater: DNSUpdater):
         self._updater = updater
@@ -374,7 +378,8 @@ class DNSUpdater:
         self._log_http_errors = log_http_errors
         self._timeout = timeout
 
-    async def update_ipv6_address_entry(self) -> bool:
+    async def update_ipv6_address_entry(self, force: bool) -> bool:
+        _ = force
         return False
 
     async def request(
@@ -511,7 +516,7 @@ class IonosDNSUpdater(DNSUpdater):
 
         return self
 
-    async def update_ipv6_address_entry(self) -> bool:
+    async def update_ipv6_address_entry(self, force: bool) -> bool:
         _LOGGER.info("Checking for necessary update of ipv6 address")
 
         if not self._attempt_update:
@@ -527,6 +532,7 @@ class IonosDNSUpdater(DNSUpdater):
         local_address_short = str(local_address.compressed)
 
         equal = False
+        dns_address_short = "needs to be replaced"
         try:
             dns_address = IPv6Address(self._dns_sensor.native_value)
             dns_address_short = str(dns_address.compressed)
@@ -537,7 +543,10 @@ class IonosDNSUpdater(DNSUpdater):
             )
             # fails on first installation, because this value is empty
 
-        if not equal:
+        if not equal or force:
+            if force:
+                _LOGGER.warning("Upstream appears to be malformed. Definitely update!")
+
             # differs, should be updated
             _LOGGER.info(
                 f"Attempting update of DNS entry on IONOS API from {dns_address_short} -> {local_address_short}"
@@ -557,7 +566,15 @@ class IonosDNSUpdater(DNSUpdater):
                 )
 
                 # update the sensor value
-                self._dns_sensor._previous_native_value = self._dns_sensor._native_value
+                if (
+                    self._dns_sensor._native_value != ""
+                    and self._dns_sensor._native_value != None
+                ):
+                    self._dns_sensor._previous_native_value = (
+                        self._dns_sensor._native_value
+                    )
+                else:
+                    self._dns_sensor._previous_native_value = local_address_short
                 self._dns_sensor._native_value = local_address_short
 
             return status
